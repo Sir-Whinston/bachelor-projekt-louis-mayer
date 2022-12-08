@@ -7,7 +7,7 @@ from numpy.random import randint
 
 ALLOWED_SIDES = [ORIENTATIONS[0], ORIENTATIONS[1], ORIENTATIONS[2], ORIENTATIONS[3], ORIENTATIONS[4], ORIENTATIONS[5]] #allow all direction (N,S,E,W,UP,DOWN)
 ALLOWED_BLOCKS = [REDSTONE_BLOCK, GLASS, SLIME]
-
+MODE = 'RANDOM'
 
 class Node:
     """basic node structure for graph representation of a block and its neighbors """
@@ -29,11 +29,17 @@ def set_new_block_types(pop, fittest, mutation_prob):
     for f in fittest:
         allowed_blocks_new.append(f.block_type)
 
-    for p in pop:
-        if uniform() <= mutation_prob:
-            p.block_type = choice(ALLOWED_BLOCKS)
-        else:
-            p.block_type = allowed_blocks_new[randint(0,len(allowed_blocks_new))]
+        if MODE == 'RANDOM':
+        for p in pop:
+            if uniform() <= mutation_prob:
+                p.block_type = choice(ALLOWED_BLOCKS)
+            else:
+                p.block_type = allowed_blocks_new[randint(0,len(allowed_blocks_new))]
+
+        elif MODE == 'NEIGHBOR':
+            for f in fittest:
+                for n in f.neighbors:
+                    n.block_type = f.block_type
 
     Node.ALLOWED_BLOCKS_NEW = allowed_blocks_new
 
@@ -57,7 +63,10 @@ def predict_neighbors(pop, generation, mutation_prob):
             if generation == 0 or uniform() > 1 - mutation_prob:
                 p.prediction[i] = choice(ALLOWED_BLOCKS)
             else:
-                p.prediction[i] = choice(Node.ALLOWED_BLOCKS_NEW)
+                if MODE == 'RANDOM':
+                    p.prediction[i] = choice(Node.ALLOWED_BLOCKS_NEW)
+                elif MODE == 'NEIGHBOR':
+                    p.prediction[i] = p.block_type
     return pop
 
 
