@@ -1,13 +1,13 @@
 from numpy.random import choice, randint, uniform
 from utils.block_utils import Blocks, ORIENTATIONS, block_directions, move_coordinate, ClientHandler, Orientation, \
     BlockType, OBSIDIAN, REDSTONE_BLOCK, GLASS, COBBLESTONE, BRICK_BLOCK, SLIME, COAL_BLOCK, LAPIS_BLOCK
-from typing import List
-from copy import deepcopy
-from numpy.random import randint
+from action_network import *
+from prediction_network import *
+import numpy as np
 
 ALLOWED_SIDES = [ORIENTATIONS[0], ORIENTATIONS[1], ORIENTATIONS[2], ORIENTATIONS[3], ORIENTATIONS[4], ORIENTATIONS[5]] #allow all direction (N,S,E,W,UP,DOWN)
-ALLOWED_BLOCKS = [REDSTONE_BLOCK, GLASS, SLIME]
-MODE = 'RANDOM'
+ALLOWED_BLOCKS = [REDSTONE_BLOCK, LAPIS_BLOCK, SLIME, COBBLESTONE]
+
 
 class Node:
     """basic node structure for graph representation of a block and its neighbors """
@@ -17,56 +17,49 @@ class Node:
         self.orientation = orientation
         self.neighbors = []
         self.coordinate = coordinate
-        self.prediction = []
+        self.prediction_network = None
+        self.action_network = None
 
-    ALLOWED_BLOCKS_NEW = []
+    def predict(self):
+        list = []
+        for n in self.neighbors:
+            norm = (n.block_type-min(ALLOWED_BLOCKS))/(max(ALLOWED_BLOCKS)-min(ALLOWED_BLOCKS)) #normalize
+            list.append(norm)
+        pred = self.prediction_network.input(np.array(list))
+        print(pred*(max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS))+min(ALLOWED_BLOCKS))
+        return pred*(max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS))+min(ALLOWED_BLOCKS) #de-normalize
 
+    def action(self):
+        list = []
+        for n in self.neighbors:
+            norm = (n.block_type-min(ALLOWED_BLOCKS))/(max(ALLOWED_BLOCKS)-min(ALLOWED_BLOCKS)) #normalize
+            list.append(norm)
+        act = self.action_network.input(np.array(list))
+        print(act*(max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS))+min(ALLOWED_BLOCKS))
+        return act*(max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS))+min(ALLOWED_BLOCKS) #de-normalize
 
 
 def set_new_block_types(pop, fittest, mutation_prob):
 
-    allowed_blocks_new = []
-    for f in fittest:
-        allowed_blocks_new.append(f.block_type)
+    return None
 
-        if MODE == 'RANDOM':
-        for p in pop:
-            if uniform() <= mutation_prob:
-                p.block_type = choice(ALLOWED_BLOCKS)
-            else:
-                p.block_type = allowed_blocks_new[randint(0,len(allowed_blocks_new))]
-
-        elif MODE == 'NEIGHBOR':
-            for f in fittest:
-                for n in f.neighbors:
-                    n.block_type = f.block_type
-
-    Node.ALLOWED_BLOCKS_NEW = allowed_blocks_new
-
-    return pop
 
 def find_neighbors(pop):
     for p in pop:
-        for side in ORIENTATIONS:
-            coord = move_coordinate(p.coordinate, side)
-            for _p in pop:
-                if _p.coordinate == coord:
-                    p.neighbors.append(_p)
-                    p.prediction.append(None)
+        for block in p:
+            for side in ORIENTATIONS:
+                coord = move_coordinate(block.coordinate, side)
+                for _block in p:
+                    if _block.coordinate == coord:
+                        block.neighbors.append(_block)
     return pop
 
-
-def predict_neighbors(pop, generation, mutation_prob):
-
+def initialize_networks(pop):
     for p in pop:
-        for i in range(len(p.prediction)):
-            if generation == 0 or uniform() > 1 - mutation_prob:
-                p.prediction[i] = choice(ALLOWED_BLOCKS)
-            else:
-                if MODE == 'RANDOM':
-                    p.prediction[i] = choice(Node.ALLOWED_BLOCKS_NEW)
-                elif MODE == 'NEIGHBOR':
-                    p.prediction[i] = p.block_type
+        for block in p:
+            block.prediction_network = PredictionNetwork(len(block.neighbors),len(block.neighbors)+1, 1, lambda x : abs(x))
+            block.action_network = ActionNetwork(len(block.neighbors),len(block.neighbors)+1, 1, lambda x : abs(x))
+
     return pop
 
 
@@ -74,5 +67,4 @@ def random_init(coordinate):
     rand_block_type = choice(ALLOWED_BLOCKS)
     rand_orientation = randint(0, len(ORIENTATIONS))
     node = Node(rand_block_type, rand_orientation, coordinate)
-
     return node
