@@ -33,7 +33,6 @@ class ActionNetwork:
         self.activationFunction = activationFunction
         self._constructRandomMatrices()
 
-
     def _constructRandomMatrices(self):
         """ 
         generates random matrices with values in [-1,1) suspect to change via fromGenom 

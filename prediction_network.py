@@ -31,7 +31,7 @@ class PredictionNetwork:
         self.hiddenOutput = None
         self.activationFunction = activationFunction
         self._constructRandomMatrices()
-        
+        self.age = 0
 
     def _constructRandomMatrices(self):
         """ 
@@ -46,10 +46,7 @@ class PredictionNetwork:
         """ 
         returns the genome representing this network 
         """
-        print(numpy.concatenate((self.hidden[:,:self.amountIn].flatten(),
-                                    numpy.diag(self.hidden[:,self.amountIn:]),
-                                    self.hiddenOutput.flatten(),
-                                    self.out.flatten())))
+
         return numpy.concatenate((self.hidden[:,:self.amountIn].flatten(),
                                     numpy.diag(self.hidden[:,self.amountIn:]),
                                     self.hiddenOutput.flatten(),
@@ -82,7 +79,6 @@ class PredictionNetwork:
         vector -- numpy vector that should be input to this network, amount of elements must match *amountIn*
 
         """
-
         self.hiddenOutput = self.activationFunction(self.hidden.dot(numpy.concatenate((vector, self.hiddenOutput), 0)))
         return self.activationFunction(self.out.dot(self.hiddenOutput))
 
