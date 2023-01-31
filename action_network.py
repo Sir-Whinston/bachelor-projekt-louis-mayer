@@ -39,14 +39,12 @@ class ActionNetwork:
         """
         self.hidden = 2 * numpy.random.rand(self.amountHidden, self.amountIn) - 1
         self.out = 2 * numpy.random.rand(self.amountOut, self.amountHidden) - 1
-        
 
     def toGenome(self):
         """ 
         returns the genome representing this network 
         """
         return numpy.concatenate((self.hidden.flatten(), self.out.flatten()))
-
 
     def fromGenome(self, genome):
         """ 
@@ -58,13 +56,12 @@ class ActionNetwork:
         """
 
         # get either genome
-        genomeHidden = genome[:self.amountHidden*self.amountIn]
-        genomeOut = genome[self.amountHidden*self.amountIn:]
+        genomeHidden = genome[:self.amountHidden * self.amountIn]
+        genomeOut = genome[self.amountHidden * self.amountIn:]
 
         # construct matrices
         self.hidden = genomeHidden.reshape(self.amountHidden, self.amountIn)
         self.out = genomeOut.reshape(self.amountOut, self.amountHidden)
-
 
     def input(self, vector):
         """ 

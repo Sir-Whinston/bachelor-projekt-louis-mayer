@@ -24,8 +24,8 @@ def move_coordinate(coord: (int, int, int), side_idx, delta=1):
         lambda c: (c[0] - delta, c[1], c[2]),  # Go West
         lambda c: (c[0], c[1], c[2] + delta),  # Go South
         lambda c: (c[0] + delta, c[1], c[2]),  # Go East
-        lambda c: (c[0], c[1] + delta, c[2]),  # Go Up
-        lambda c: (c[0], c[1] - delta, c[2]),  # Go Down
+        #lambda c: (c[0], c[1] + delta, c[2]),  # Go Up
+        #lambda c: (c[0], c[1] - delta, c[2]),  # Go Down
     ]
     return switcher[side_idx](coord)
 

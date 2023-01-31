@@ -20,30 +20,77 @@ class Node:
         self.prediction_network = None
         self.action_network = None
         self.score = 0.0
+        self.last_action = 0
+        self.prediction = None
+        self.mode = 0
+        self.neighbor_mode = 0
 
-    def predict(self):
-        list = [0, 0, 0, 0]
-        i = 0
-        for n in self.neighbors:
-            # norm = (n.block_type - min(ALLOWED_BLOCKS)) / (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS))  # normalize
-            list[i] = n.block_type
-            i = i + 1
-        pred = self.prediction_network.input(np.array([[list[0]], [list[1]], [list[2]], [list[3]]]))
-        denorm = pred * (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS)) + min(ALLOWED_BLOCKS)  # de-normalize
-        result = find_nearest(ALLOWED_BLOCKS, denorm)
-        return result
+    def predict(self, act):
 
-    def action(self):
-        list = [0, 0, 0, 0]
-        i = 0
-        for n in self.neighbors:
-            # norm = (n.block_type - min(ALLOWED_BLOCKS)) / (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS))  # normalize
-            list[i] = n.block_type
-            i = i + 1
+        if self.neighbor_mode == 0:
+            neighbor_list = [0, 0, 0, 0]
+            for i in range(len(self.neighbors)):
+                # norm = (self.neighbors[i][0].block_type - min(ALLOWED_BLOCKS)) / (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS))  # normalize
+                neighbor_list[i] = self.neighbors[i][0].block_type
+        elif self.neighbor_mode == 1:
+            neighbor_list = []
+            for n in self.neighbors:
+                # norm = (n[0].block_type - min(ALLOWED_BLOCKS)) / (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS))  # normalize
+                neighbor_list.append(n[0].block_type)
 
-        pred = self.action_network.input(np.array([[list[0]], [list[1]], [list[2]], [list[3]]]))
+        match self.mode:
+            case 0:
+                input_vector = np.array(
+                    [[neighbor_list[0]], [neighbor_list[1]], [neighbor_list[2]], [neighbor_list[3]]])
+            case 1:
+                input_vector = np.array(
+                    [[neighbor_list[0]], [neighbor_list[1]], [neighbor_list[2]], [neighbor_list[3]]])
+            case 2:
+                input_vector = np.array(
+                    [[neighbor_list[0]], [neighbor_list[1]], [neighbor_list[2]], [neighbor_list[3]], [act]])
+            case 3:
+                input_vector = np.array(
+                    [[neighbor_list[0]], [neighbor_list[1]], [neighbor_list[2]], [neighbor_list[3]], [act]])
+
+        pred = self.prediction_network.input(input_vector)
+
         denorm = pred * (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS)) + min(ALLOWED_BLOCKS)  # de-normalize
         result = find_nearest(ALLOWED_BLOCKS, denorm)  # find corresponding block
+
+        self.prediction = result
+
+    def action(self):
+        if self.neighbor_mode == 0:
+            neighbor_list = [0, 0, 0, 0]
+            for i in range(len(self.neighbors)):
+                # norm = (self.neighbors[i][0].block_type - min(ALLOWED_BLOCKS)) / (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS))  # normalize
+                neighbor_list[i] = self.neighbors[i][0].block_type
+        elif self.neighbor_mode == 1:
+            neighbor_list = []
+            for n in self.neighbors:
+                # norm = (n[0].block_type - min(ALLOWED_BLOCKS)) / (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS))  # normalize
+                neighbor_list.append(n[0].block_type)
+
+        match self.mode:
+            case 0:
+                input_vector = np.array(
+                    [[neighbor_list[0]], [neighbor_list[1]], [neighbor_list[2]], [neighbor_list[3]]])
+            case 1:
+                input_vector = np.array(
+                    [[neighbor_list[0]], [neighbor_list[1]], [neighbor_list[2]], [neighbor_list[3]],
+                     [self.last_action]])
+            case 2:
+                input_vector = np.array(
+                    [[neighbor_list[0]], [neighbor_list[1]], [neighbor_list[2]], [neighbor_list[3]]])
+            case 3:
+                input_vector = np.array(
+                    [[neighbor_list[0]], [neighbor_list[1]], [neighbor_list[2]], [neighbor_list[3]],
+                     [self.last_action]])
+
+        act = self.action_network.input(input_vector)
+        denorm = act * (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS)) + min(ALLOWED_BLOCKS)  # de-normalize
+        result = find_nearest(ALLOWED_BLOCKS, denorm)  # find corresponding block
+        self.last_action = result
         return result
 
 
@@ -53,88 +100,127 @@ def find_nearest(array, value):
     return array[idx]
 
 
-def set_new_block_types(pop, action_list):
-    i = 0
+def set_new_block_types(pop):
     for p in pop:
         for block in p:
-            block.block_type = action_list[i]
-            i = i + 1
-
-    return pop
+            block.block_type = block.last_action
 
 
-def find_neighbors(pop):
+def find_neighbors(pop, cage_size, neighbor_mode):
     for p in pop:
+        # find neighbors for each block
         for block in p:
+            block.neighbor_mode = neighbor_mode
             for side in ORIENTATIONS:
                 coord = move_coordinate(block.coordinate, side)
                 for _block in p:
                     if _block.coordinate == coord:
-                        block.neighbors.append(_block)
+                        block.neighbors.append((_block, side))
+            if neighbor_mode == 1:
+                # if block is at edge or corner of arena, then he currently has only two or three neighbors
+                if len(block.neighbors) < 4:
+                    # get sides of block that currently have an assigned neighbor
+                    sides_with_neighbor = [x[1] for x in block.neighbors]
+                    for side in ORIENTATIONS:
+                        # get sides that currently have no assigned neighbor
+                        if side not in sides_with_neighbor:
+                            # if north or south side are missing
+                            if side == 0 or side == 2:
+                                coord = move_coordinate(block.coordinate, side, delta=-(cage_size[1] - 1))
+                            # if west or east side are missing
+                            else:
+                                coord = move_coordinate(block.coordinate, side, delta=-(cage_size[0] - 1))
+                            # find 'neighbor' blocks from other side of arena and add them to neighbor list
+                            for _block in p:
+                                if _block.coordinate == coord:
+                                    block.neighbors.append((_block, side))
     return pop
 
 
 def sigmoid(x):
-    return 1 / (1 + np.exp(-x))
+    return 1 / (1 + np.exp(-3 * x))
 
 
-def initialize_networks(pop):
+def initialize_networks(pop, mode):
     for p in pop:
-        predict = PredictionNetwork(4, 5, 1, lambda x: sigmoid(x))
-        act = ActionNetwork(4, 5, 1, lambda x: sigmoid(x))
+        act, predict = new_networks(mode)
         for block in p:
-            block.prediction_network = predict
-            block.action_network = act
+            a, p = new_networks(mode)
+            a.fromGenome(numpy.array(act.toGenome()))
+            p.fromGenome(numpy.array(predict.toGenome()))
+            block.prediction_network = p
+            block.action_network = a
+            block.mode = mode
     return pop
 
 
-def assign_new_networks(individual, sorted_fitness, sorted_population, mutation_prob):
-    """Implemenation of a 'wheel of fortune' to determine the new networks for an individual.
+def assign_new_networks(individual, sorted_fitness, sorted_population, mutation_prob, new_network_prob):
+    """Implementation of a 'wheel of fortune' to determine the new networks for an individual.
     All existing individuals and their networks are taken into account. The fitter an individual, the higher
      its chance to copy its network onto another individual. The copied networks might mutate before being
      assigned to the individual"""
 
-    s = sum(sorted_fitness)
     uni = uniform()
-    old_max = 0.0
+    if uni <= new_network_prob:
+        replaceNetworks(individual)
 
-    for i in range(len(sorted_fitness)):
-        if old_max < uni <= (sorted_fitness[i] / s + old_max):
-            pred_network = sorted_population[i][0].prediction_network
-            act_network = sorted_population[i][0].action_network
-            break
-        old_max = old_max + sorted_fitness[i] / s
+    else:
+        old_max = new_network_prob
+        s = (sum(sorted_fitness) - new_network_prob * sum(sorted_fitness))
 
-    if pred_network != individual[0].prediction_network:  # only assign network copy if new network is not old network
-        genomeAction = act_network.toGenome()
-        genomePrediction = pred_network.toGenome()
+        for i in range(len(sorted_fitness)):
+            if old_max < uni <= ((sorted_fitness[i] / s) + old_max):
+                pred_network = sorted_population[i][0].prediction_network
+                act_network = sorted_population[i][0].action_network
+                break
+            old_max = old_max + (sorted_fitness[i] / s)
 
-        # mutate
-        genomeAction = [x if random() >= mutation_prob else x + uniform(-0.4, 0.4) for x in genomeAction]
-        genomePrediction = [x if random() >= mutation_prob else x + uniform(-0.4, 0.4) for x in
-                            genomePrediction]
+        if pred_network != individual[
+            0].prediction_network:  # only assign network copy if new network is not old network
+            genomeAction = act_network.toGenome()
+            genomePrediction = pred_network.toGenome()
 
-        copy_act = ActionNetwork(4, 5, 1, lambda x: sigmoid(x))
-        copy_pred = PredictionNetwork(4, 5, 1, lambda x: sigmoid(x))
-        copy_act.fromGenome(numpy.array(genomeAction))
-        copy_pred.fromGenome(numpy.array(genomePrediction))
+            # mutate
+            genomeAction = [x if random() >= mutation_prob else x + uniform(-0.4, 0.4) for x in genomeAction]
+            genomePrediction = [x if random() >= mutation_prob else x + uniform(-0.4, 0.4) for x in
+                                genomePrediction]
 
-        for block in individual:
-            block.prediction_network = copy_pred
-            block.action_network = copy_act
+            for block in individual:
+                copy_act, copy_pred = new_networks(block.mode)
+                copy_act.fromGenome(numpy.array(genomeAction))
+                copy_pred.fromGenome(numpy.array(genomePrediction))
+                block.prediction_network = copy_pred
+                block.action_network = copy_act
 
 
 def replaceNetworks(individual):
     print('replace network')
-    # genomeAction = individual[0].action_network.toGenome()
-    # genomePrediction = individual[0].prediction_network.toGenome()
-
-    new_act = ActionNetwork(4, 5, 1, lambda x: sigmoid(x))
-    new_pred = PredictionNetwork(4, 5, 1, lambda x: sigmoid(x))
+    new_act, new_pred = new_networks(individual[0].mode)
 
     for block in individual:
-        block.prediction_network = new_pred
-        block.action_network = new_act
+        a, p = new_networks(block.mode)
+        a.fromGenome(numpy.array(new_act.toGenome()))
+        p.fromGenome(numpy.array(new_pred.toGenome()))
+        block.prediction_network = p
+        block.action_network = a
+
+
+def new_networks(mode):
+    match mode:
+        case 0:
+            act = ActionNetwork(4, 5, 1, lambda x: sigmoid(x))
+            pred = PredictionNetwork(4, 5, 1, lambda x: sigmoid(x))
+        case 1:
+            act = ActionNetwork(5, 5, 1, lambda x: sigmoid(x))
+            pred = PredictionNetwork(4, 5, 1, lambda x: sigmoid(x))
+        case 2:
+            act = ActionNetwork(4, 5, 1, lambda x: sigmoid(x))
+            pred = PredictionNetwork(5, 5, 1, lambda x: sigmoid(x))
+        case 3:
+            act = ActionNetwork(5, 5, 1, lambda x: sigmoid(x))
+            pred = PredictionNetwork(5, 5, 1, lambda x: sigmoid(x))
+
+    return act, pred
 
 
 def random_init(coordinate):

@@ -31,7 +31,6 @@ class PredictionNetwork:
         self.hiddenOutput = None
         self.activationFunction = activationFunction
         self._constructRandomMatrices()
-        self.age = 0
 
     def _constructRandomMatrices(self):
         """ 
