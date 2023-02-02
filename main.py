@@ -31,7 +31,7 @@ NEW_NETWORK_PROB = 0.05
     1: This mode adds the last taken action as a fifth input to the action network. Prediction remains standard
     2: This mode adds the result of the action network as a fifth input to the prediction network. Action remains standard
     3: This mode combines Mode 1 and 2. Both action and prediction networks now have five inputs."""
-NETWORK_INPUT_MODE = 2
+NETWORK_INPUT_MODE = 0
 
 """Defines how neighbors are assigned to blocks. Possible modes are:
     0: Neighbors are only directly adjacent blocks. Therefore, boundary and corner blocks only have 3 or 2 neighbors, 
@@ -40,6 +40,9 @@ NETWORK_INPUT_MODE = 2
     fill their missing neighbors with the block from the end of the arena in the opposite direction to the missing neighbor"""
 NEIGHBOR_MODE = 1
 
+"""Defines the chance by which a network gets a wrong neighbor block type as input. Resembles noise in a physical 
+sensor"""
+NOISE_RATIO = 0.03
 
 def initialize():
     individual_list = []
@@ -49,7 +52,8 @@ def initialize():
         block_list = []
         for j in range(CAGE_SIZE[0]):
             for k in range(CAGE_SIZE[1]):
-                node = random_init((START_COORD[0] + i + j, START_COORD[1], START_COORD[2] + k))
+                node = random_init((START_COORD[0] + i + j, START_COORD[1], START_COORD[2] + k), NETWORK_INPUT_MODE,
+                                   NEIGHBOR_MODE, NOISE_RATIO)
                 block_list.append(node)
         individual_list.append(block_list)
 
@@ -68,8 +72,8 @@ def show_population(population, block_buffer: ClientHandler):
 def evolution(generations=1000, mutation_prob=0.1, parent_cuttoff_ratio=0.05):
     population = initialize()
     block_buffer = ClientHandler()
-    population = find_neighbors(population, CAGE_SIZE, NEIGHBOR_MODE)
-    population = initialize_networks(population, NETWORK_INPUT_MODE)
+    population = find_neighbors(population, CAGE_SIZE)
+    population = initialize_networks(population)
 
     time.sleep(8)
     show_population(population, block_buffer)

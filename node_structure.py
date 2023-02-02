@@ -12,7 +12,7 @@ ALLOWED_BLOCKS = [GLASS, REDSTONE_BLOCK, COAL_BLOCK, LAPIS_BLOCK, COBBLESTONE]
 class Node:
     """basic node structure for graph representation of a block and its neighbors """
 
-    def __init__(self, block_type_id, orientation, coordinate):
+    def __init__(self, block_type_id, orientation, coordinate, network_input_mode, neighbor_mode, noise_ratio):
         self.block_type = block_type_id
         self.orientation = orientation
         self.neighbors = []
@@ -22,21 +22,14 @@ class Node:
         self.score = 0.0
         self.last_action = 0
         self.prediction = None
-        self.mode = 0
-        self.neighbor_mode = 0
+        self.mode = network_input_mode
+        self.neighbor_mode = neighbor_mode
+        self.noise = noise_ratio
+
 
     def predict(self, act):
 
-        if self.neighbor_mode == 0:
-            neighbor_list = [0, 0, 0, 0]
-            for i in range(len(self.neighbors)):
-                # norm = (self.neighbors[i][0].block_type - min(ALLOWED_BLOCKS)) / (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS))  # normalize
-                neighbor_list[i] = self.neighbors[i][0].block_type
-        elif self.neighbor_mode == 1:
-            neighbor_list = []
-            for n in self.neighbors:
-                # norm = (n[0].block_type - min(ALLOWED_BLOCKS)) / (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS))  # normalize
-                neighbor_list.append(n[0].block_type)
+        neighbor_list = self.getNeighborBlockTypes()
 
         match self.mode:
             case 0:
@@ -60,16 +53,8 @@ class Node:
         self.prediction = result
 
     def action(self):
-        if self.neighbor_mode == 0:
-            neighbor_list = [0, 0, 0, 0]
-            for i in range(len(self.neighbors)):
-                # norm = (self.neighbors[i][0].block_type - min(ALLOWED_BLOCKS)) / (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS))  # normalize
-                neighbor_list[i] = self.neighbors[i][0].block_type
-        elif self.neighbor_mode == 1:
-            neighbor_list = []
-            for n in self.neighbors:
-                # norm = (n[0].block_type - min(ALLOWED_BLOCKS)) / (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS))  # normalize
-                neighbor_list.append(n[0].block_type)
+
+        neighbor_list = self.getNeighborBlockTypes()
 
         match self.mode:
             case 0:
@@ -93,6 +78,27 @@ class Node:
         self.last_action = result
         return result
 
+    def getNeighborBlockTypes(self):
+
+        if self.neighbor_mode == 0:
+            neighbor_list = [0, 0, 0, 0]
+            for i in range(len(self.neighbors)):
+                # norm = (self.neighbors[i][0].block_type - min(ALLOWED_BLOCKS)) / (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS))  # normalize
+                if uniform() <= self.noise:
+                    neighbor_list[i] = choice([x for x in ALLOWED_BLOCKS if x != self.neighbors[i][0].block_type])
+                else:
+                    neighbor_list[i] = self.neighbors[i][0].block_type
+        elif self.neighbor_mode == 1:
+            neighbor_list = []
+            for n in self.neighbors:
+                # norm = (n[0].block_type - min(ALLOWED_BLOCKS)) / (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS))  # normalize
+                if random() <= self.noise:
+                    neighbor_list.append(choice([x for x in ALLOWED_BLOCKS if x != n[0].block_type]))
+                else:
+                    neighbor_list.append(n[0].block_type)
+
+        return neighbor_list
+
 
 def find_nearest(array, value):
     array = np.asarray(array)
@@ -106,17 +112,16 @@ def set_new_block_types(pop):
             block.block_type = block.last_action
 
 
-def find_neighbors(pop, cage_size, neighbor_mode):
+def find_neighbors(pop, cage_size):
     for p in pop:
         # find neighbors for each block
         for block in p:
-            block.neighbor_mode = neighbor_mode
             for side in ORIENTATIONS:
                 coord = move_coordinate(block.coordinate, side)
                 for _block in p:
                     if _block.coordinate == coord:
                         block.neighbors.append((_block, side))
-            if neighbor_mode == 1:
+            if block.neighbor_mode == 1:
                 # if block is at edge or corner of arena, then he currently has only two or three neighbors
                 if len(block.neighbors) < 4:
                     # get sides of block that currently have an assigned neighbor
@@ -141,16 +146,12 @@ def sigmoid(x):
     return 1 / (1 + np.exp(-3 * x))
 
 
-def initialize_networks(pop, mode):
+def initialize_networks(pop):
     for p in pop:
-        act, predict = new_networks(mode)
+        act, predict = new_networks(p[0].mode)
         for block in p:
-            a, p = new_networks(mode)
-            a.fromGenome(numpy.array(act.toGenome()))
-            p.fromGenome(numpy.array(predict.toGenome()))
-            block.prediction_network = p
-            block.action_network = a
-            block.mode = mode
+            block.prediction_network = predict
+            block.action_network = act
     return pop
 
 
@@ -198,11 +199,8 @@ def replaceNetworks(individual):
     new_act, new_pred = new_networks(individual[0].mode)
 
     for block in individual:
-        a, p = new_networks(block.mode)
-        a.fromGenome(numpy.array(new_act.toGenome()))
-        p.fromGenome(numpy.array(new_pred.toGenome()))
-        block.prediction_network = p
-        block.action_network = a
+        block.prediction_network = new_pred
+        block.action_network = new_act
 
 
 def new_networks(mode):
@@ -223,8 +221,8 @@ def new_networks(mode):
     return act, pred
 
 
-def random_init(coordinate):
+def random_init(coordinate, network_input_mode, neighbor_mode, noise_ratio):
     rand_block_type = choice(ALLOWED_BLOCKS)
     rand_orientation = randint(0, len(ORIENTATIONS))
-    node = Node(rand_block_type, rand_orientation, coordinate)
+    node = Node(rand_block_type, rand_orientation, coordinate, network_input_mode, neighbor_mode, noise_ratio)
     return node
