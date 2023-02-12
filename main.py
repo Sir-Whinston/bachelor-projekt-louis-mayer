@@ -8,6 +8,10 @@ from numpy.random import uniform, randint
 import sys
 import time
 
+import seaborn as sns
+import matplotlib.pyplot as plt
+import pandas as pd
+
 sys.setrecursionlimit(10000)
 
 START_COORD = (10, 4, 10)
@@ -31,7 +35,15 @@ NEW_NETWORK_PROB = 0.05
     1: This mode adds the last taken action as a fifth input to the action network. Prediction remains standard
     2: This mode adds the result of the action network as a fifth input to the prediction network. Action remains standard
     3: This mode combines Mode 1 and 2. Both action and prediction networks now have five inputs."""
-NETWORK_INPUT_MODE = 0
+NETWORK_INPUT_MODE = 3
+
+"""Defines how predictions are made and therefore how a block performs during evaluation. Possible modes are:
+    0: The prediction network of a block only has one output, with which it predicts the blocks type in the next time
+    step.
+    1: The prediction network of a block has four outputs, with which it predicts the types of the blocks neighbors in 
+    the next time step. Should a block not have four neighbors (because of NEIGHBOR_MODE = 0), predictions made for non-
+    existing neighbors are discarded during evaluation."""
+PREDICTION_MODE = 1
 
 """Defines how neighbors are assigned to blocks. Possible modes are:
     0: Neighbors are only directly adjacent blocks. Therefore, boundary and corner blocks only have 3 or 2 neighbors, 
@@ -44,6 +56,11 @@ NEIGHBOR_MODE = 1
 sensor"""
 NOISE_RATIO = 0.03
 
+"""Defines how important the prediction is to evaluate a blocks score. Must be between 0 and 1. The higher the value,
+ the more important the prediction. The importance of the bonus for change in action therefore is 1 - PREDICTION_WEIGHT"""
+PREDICTION_WEIGHT = 0.5
+
+
 def initialize():
     individual_list = []
 
@@ -53,7 +70,7 @@ def initialize():
         for j in range(CAGE_SIZE[0]):
             for k in range(CAGE_SIZE[1]):
                 node = random_init((START_COORD[0] + i + j, START_COORD[1], START_COORD[2] + k), NETWORK_INPUT_MODE,
-                                   NEIGHBOR_MODE, NOISE_RATIO)
+                                   NEIGHBOR_MODE, NOISE_RATIO, PREDICTION_MODE)
                 block_list.append(node)
         individual_list.append(block_list)
 
@@ -75,13 +92,14 @@ def evolution(generations=1000, mutation_prob=0.1, parent_cuttoff_ratio=0.05):
     population = find_neighbors(population, CAGE_SIZE)
     population = initialize_networks(population)
 
-    time.sleep(8)
+    time.sleep(4)
     show_population(population, block_buffer)
 
+    fitness = []
     for generation in range(generations):
-        time.sleep(1)
+        #time.sleep(1)
 
-        print('Generation', generation)
+        print('Time step', generation)
 
         if generation % CYCLES_BETWEEN_EVALUATION == 0 and generation != 0:
             """evaluate individuals and form new population every *CYCLES_BETWEEN_EVALUATION* generations"""
@@ -95,35 +113,42 @@ def evolution(generations=1000, mutation_prob=0.1, parent_cuttoff_ratio=0.05):
                 if individual != sorted_pop[len(sorted_pop) - 1]:  # fittest individual remains unchanged
                     assign_new_networks(individual, sorted_fitness, sorted_pop, mutation_prob, NEW_NETWORK_PROB)
 
-            time.sleep(2)
+            print('Generation', int(generation / CYCLES_BETWEEN_EVALUATION))
+
+            # collect data for fitness plotting
+            if PREDICTION_WEIGHT != 1.0:
+                bonus = (1-PREDICTION_WEIGHT) * CAGE_SIZE[0] * CAGE_SIZE[1] * CYCLES_BETWEEN_EVALUATION
+            else:
+                bonus = 0
+            if PREDICTION_MODE == 0:
+                fitness.append((((sorted_fitness[len(sorted_fitness) - 1])/((CAGE_SIZE[0]*CAGE_SIZE[1]*CYCLES_BETWEEN_EVALUATION) + bonus)), int(generation / CYCLES_BETWEEN_EVALUATION)))
+            elif PREDICTION_MODE == 1 and NEIGHBOR_MODE == 0:
+                fitness.append((((sorted_fitness[len(sorted_fitness) - 1])/((CAGE_SIZE[0]*CAGE_SIZE[1]*CYCLES_BETWEEN_EVALUATION*4) - (2*CAGE_SIZE[0] + 2*CAGE_SIZE[1]) + bonus)), int(generation / CYCLES_BETWEEN_EVALUATION)))
+            elif PREDICTION_MODE == 1 and NEIGHBOR_MODE == 1:
+                fitness.append((((sorted_fitness[len(sorted_fitness) - 1])/((CAGE_SIZE[0]*CAGE_SIZE[1]*CYCLES_BETWEEN_EVALUATION*4) + bonus)), int(generation / CYCLES_BETWEEN_EVALUATION)))
+
+            time.sleep(1)
 
         for p in population:
             for block in p:
-                act = block.action()
+                current_type = block.block_type
+                act = block.act()
                 block.predict(act)
-                evaluate(block)
+                evaluate(block, PREDICTION_WEIGHT, current_type)
 
         set_new_block_types(population)
         show_population(population, block_buffer)
 
+    # plotting of fitness development
+    df = pd.DataFrame({"Generation": [f[1] for f in fitness],
+                       "Fitness (score of best individual in generation)"
+                       : [f[0] for f in fitness]})
+    sns.lineplot(x="Generation", y="Fitness (score of best individual in generation)", data=df)
+    plt.xticks(rotation=15)
+    plt.title('Development of fitness')
+    plt.show()
 
-"""
-        population = predict_neighbors(population, generation, mutation_prob)
-        
-        ev = lambda p: evaluate(p)
-        fitness_values = list(map(ev,population))
-        pop_x_fitness = zip(fitness_values, population)
-        pop_x_fitness= sorted(pop_x_fitness, key=itemgetter(0), reverse=False)
-        _ , sorted_pop = map(list, zip(*pop_x_fitness))
-
-        fittest = sorted_pop[-int(parent_cuttoff_ratio * POPULATION_SIZE):]
-
-        new_generation = set_new_block_types(population, fittest, mutation_prob)
-        population = new_generation
-        show_population(population, block_buffer)
-
-        time.sleep(1)
-"""
 
 if __name__ == "__main__":
-    evolution(generations=121, mutation_prob=0.07)
+    evolution(generations=601, mutation_prob=0.05)
+

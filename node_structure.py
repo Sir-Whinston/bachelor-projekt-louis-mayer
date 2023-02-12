@@ -12,7 +12,7 @@ ALLOWED_BLOCKS = [GLASS, REDSTONE_BLOCK, COAL_BLOCK, LAPIS_BLOCK, COBBLESTONE]
 class Node:
     """basic node structure for graph representation of a block and its neighbors """
 
-    def __init__(self, block_type_id, orientation, coordinate, network_input_mode, neighbor_mode, noise_ratio):
+    def __init__(self, block_type_id, orientation, coordinate, network_input_mode, neighbor_mode, noise_ratio, prediction_mode):
         self.block_type = block_type_id
         self.orientation = orientation
         self.neighbors = []
@@ -20,18 +20,18 @@ class Node:
         self.prediction_network = None
         self.action_network = None
         self.score = 0.0
-        self.last_action = 0
+        self.action = 0
         self.prediction = None
-        self.mode = network_input_mode
+        self.network_input_mode = network_input_mode
         self.neighbor_mode = neighbor_mode
         self.noise = noise_ratio
-
+        self.prediction_mode = prediction_mode
 
     def predict(self, act):
 
         neighbor_list = self.getNeighborBlockTypes()
 
-        match self.mode:
+        match self.network_input_mode:
             case 0:
                 input_vector = np.array(
                     [[neighbor_list[0]], [neighbor_list[1]], [neighbor_list[2]], [neighbor_list[3]]])
@@ -46,36 +46,43 @@ class Node:
                     [[neighbor_list[0]], [neighbor_list[1]], [neighbor_list[2]], [neighbor_list[3]], [act]])
 
         pred = self.prediction_network.input(input_vector)
-
-        denorm = pred * (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS)) + min(ALLOWED_BLOCKS)  # de-normalize
-        result = find_nearest(ALLOWED_BLOCKS, denorm)  # find corresponding block
+        if self.prediction_mode == 0:
+            denorm = pred * (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS)) + min(ALLOWED_BLOCKS)  # de-normalize
+            result = find_nearest(ALLOWED_BLOCKS, denorm)  # find corresponding block
+        else:
+            result = []
+            for p in pred:
+                denorm = p * (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS)) + min(ALLOWED_BLOCKS)  # de-normalize
+                res = find_nearest(ALLOWED_BLOCKS, denorm)  # find corresponding block
+                result.append(res)
 
         self.prediction = result
 
-    def action(self):
+    def act(self):
 
         neighbor_list = self.getNeighborBlockTypes()
 
-        match self.mode:
+        match self.network_input_mode:
             case 0:
                 input_vector = np.array(
                     [[neighbor_list[0]], [neighbor_list[1]], [neighbor_list[2]], [neighbor_list[3]]])
             case 1:
                 input_vector = np.array(
                     [[neighbor_list[0]], [neighbor_list[1]], [neighbor_list[2]], [neighbor_list[3]],
-                     [self.last_action]])
+                     [self.action]])
             case 2:
                 input_vector = np.array(
                     [[neighbor_list[0]], [neighbor_list[1]], [neighbor_list[2]], [neighbor_list[3]]])
             case 3:
                 input_vector = np.array(
                     [[neighbor_list[0]], [neighbor_list[1]], [neighbor_list[2]], [neighbor_list[3]],
-                     [self.last_action]])
+                     [self.action]])
 
         act = self.action_network.input(input_vector)
         denorm = act * (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS)) + min(ALLOWED_BLOCKS)  # de-normalize
         result = find_nearest(ALLOWED_BLOCKS, denorm)  # find corresponding block
-        self.last_action = result
+        self.action = result
+
         return result
 
     def getNeighborBlockTypes(self):
@@ -83,19 +90,19 @@ class Node:
         if self.neighbor_mode == 0:
             neighbor_list = [0, 0, 0, 0]
             for i in range(len(self.neighbors)):
-                # norm = (self.neighbors[i][0].block_type - min(ALLOWED_BLOCKS)) / (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS))  # normalize
-                if uniform() <= self.noise:
-                    neighbor_list[i] = choice([x for x in ALLOWED_BLOCKS if x != self.neighbors[i][0].block_type])
+                norm = (self.neighbors[i][0].block_type - min(ALLOWED_BLOCKS)) / (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS))  # normalize
+                if random() <= self.noise:
+                    neighbor_list[i] = (choice([x for x in ALLOWED_BLOCKS if x != self.neighbors[i][0].block_type]) - min(ALLOWED_BLOCKS)) / (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS))
                 else:
-                    neighbor_list[i] = self.neighbors[i][0].block_type
+                    neighbor_list[i] = norm
         elif self.neighbor_mode == 1:
             neighbor_list = []
             for n in self.neighbors:
-                # norm = (n[0].block_type - min(ALLOWED_BLOCKS)) / (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS))  # normalize
+                norm = (n[0].block_type - min(ALLOWED_BLOCKS)) / (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS))  # normalize
                 if random() <= self.noise:
-                    neighbor_list.append(choice([x for x in ALLOWED_BLOCKS if x != n[0].block_type]))
+                    neighbor_list.append((choice([x for x in ALLOWED_BLOCKS if x != n[0].block_type])- min(ALLOWED_BLOCKS)) / (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS)))
                 else:
-                    neighbor_list.append(n[0].block_type)
+                    neighbor_list.append(norm)
 
         return neighbor_list
 
@@ -109,7 +116,7 @@ def find_nearest(array, value):
 def set_new_block_types(pop):
     for p in pop:
         for block in p:
-            block.block_type = block.last_action
+            block.block_type = block.action
 
 
 def find_neighbors(pop, cage_size):
@@ -148,10 +155,15 @@ def sigmoid(x):
 
 def initialize_networks(pop):
     for p in pop:
-        act, predict = new_networks(p[0].mode)
+        act, predict = new_networks(p[0].network_input_mode, p[0].prediction_mode)
+        gen_act = act.toGenome()
+        gen_pred = predict.toGenome()
         for block in p:
-            block.prediction_network = predict
-            block.action_network = act
+            a, p = new_networks(block.network_input_mode, block.prediction_mode)
+            p.fromGenome(gen_pred)
+            a.fromGenome(gen_act)
+            block.prediction_network = p
+            block.action_network = a
     return pop
 
 
@@ -163,7 +175,7 @@ def assign_new_networks(individual, sorted_fitness, sorted_population, mutation_
 
     uni = uniform()
     if uni <= new_network_prob:
-        replaceNetworks(individual)
+        individual = replaceNetworks(individual)
 
     else:
         old_max = new_network_prob
@@ -176,8 +188,7 @@ def assign_new_networks(individual, sorted_fitness, sorted_population, mutation_
                 break
             old_max = old_max + (sorted_fitness[i] / s)
 
-        if pred_network != individual[
-            0].prediction_network:  # only assign network copy if new network is not old network
+        if pred_network != individual[0].prediction_network:  # only assign network copy if new network != old network
             genomeAction = act_network.toGenome()
             genomePrediction = pred_network.toGenome()
 
@@ -187,7 +198,7 @@ def assign_new_networks(individual, sorted_fitness, sorted_population, mutation_
                                 genomePrediction]
 
             for block in individual:
-                copy_act, copy_pred = new_networks(block.mode)
+                copy_act, copy_pred = new_networks(block.network_input_mode, block.prediction_mode)
                 copy_act.fromGenome(numpy.array(genomeAction))
                 copy_pred.fromGenome(numpy.array(genomePrediction))
                 block.prediction_network = copy_pred
@@ -196,33 +207,51 @@ def assign_new_networks(individual, sorted_fitness, sorted_population, mutation_
 
 def replaceNetworks(individual):
     print('replace network')
-    new_act, new_pred = new_networks(individual[0].mode)
+    new_act, new_pred = new_networks(individual[0].network_input_mode, individual[0].prediction_mode)
 
     for block in individual:
-        block.prediction_network = new_pred
-        block.action_network = new_act
+        a, p = new_networks(block.network_input_mode, block.prediction_mode)
+        p.fromGenome(new_pred.toGenome())
+        a.fromGenome(new_act.toGenome())
+        block.prediction_network = p
+        block.action_network = a
+
+    return individual
 
 
-def new_networks(mode):
-    match mode:
+def new_networks(network_mode, prediction_mode):
+    match network_mode:
         case 0:
             act = ActionNetwork(4, 5, 1, lambda x: sigmoid(x))
-            pred = PredictionNetwork(4, 5, 1, lambda x: sigmoid(x))
+            if prediction_mode == 0:
+                pred = PredictionNetwork(4, 5, 1, lambda x: sigmoid(x))
+            else:
+                pred = PredictionNetwork(4, 5, 4, lambda x: sigmoid(x))
+
         case 1:
             act = ActionNetwork(5, 5, 1, lambda x: sigmoid(x))
-            pred = PredictionNetwork(4, 5, 1, lambda x: sigmoid(x))
+            if prediction_mode == 0:
+                pred = PredictionNetwork(4, 5, 1, lambda x: sigmoid(x))
+            else:
+                pred = PredictionNetwork(4, 5, 4, lambda x: sigmoid(x))
         case 2:
             act = ActionNetwork(4, 5, 1, lambda x: sigmoid(x))
-            pred = PredictionNetwork(5, 5, 1, lambda x: sigmoid(x))
+            if prediction_mode == 0:
+                pred = PredictionNetwork(5, 5, 1, lambda x: sigmoid(x))
+            else:
+                pred = PredictionNetwork(5, 5, 4, lambda x: sigmoid(x))
         case 3:
             act = ActionNetwork(5, 5, 1, lambda x: sigmoid(x))
-            pred = PredictionNetwork(5, 5, 1, lambda x: sigmoid(x))
+            if prediction_mode == 0:
+                pred = PredictionNetwork(5, 5, 1, lambda x: sigmoid(x))
+            else:
+                pred = PredictionNetwork(5, 5, 4, lambda x: sigmoid(x))
 
     return act, pred
 
 
-def random_init(coordinate, network_input_mode, neighbor_mode, noise_ratio):
+def random_init(coordinate, network_input_mode, neighbor_mode, noise_ratio, prediction_mode):
     rand_block_type = choice(ALLOWED_BLOCKS)
     rand_orientation = randint(0, len(ORIENTATIONS))
-    node = Node(rand_block_type, rand_orientation, coordinate, network_input_mode, neighbor_mode, noise_ratio)
+    node = Node(rand_block_type, rand_orientation, coordinate, network_input_mode, neighbor_mode, noise_ratio, prediction_mode)
     return node
