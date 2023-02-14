@@ -39,11 +39,13 @@ class Node:
                 input_vector = np.array(
                     [[neighbor_list[0]], [neighbor_list[1]], [neighbor_list[2]], [neighbor_list[3]]])
             case 2:
+                norm = (act - min(ALLOWED_BLOCKS)) / (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS))
                 input_vector = np.array(
-                    [[neighbor_list[0]], [neighbor_list[1]], [neighbor_list[2]], [neighbor_list[3]], [act]])
+                    [[neighbor_list[0]], [neighbor_list[1]], [neighbor_list[2]], [neighbor_list[3]], [norm]])
             case 3:
+                norm = (act - min(ALLOWED_BLOCKS)) / (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS))
                 input_vector = np.array(
-                    [[neighbor_list[0]], [neighbor_list[1]], [neighbor_list[2]], [neighbor_list[3]], [act]])
+                    [[neighbor_list[0]], [neighbor_list[1]], [neighbor_list[2]], [neighbor_list[3]], [norm]])
 
         pred = self.prediction_network.input(input_vector)
         if self.prediction_mode == 0:
@@ -67,16 +69,18 @@ class Node:
                 input_vector = np.array(
                     [[neighbor_list[0]], [neighbor_list[1]], [neighbor_list[2]], [neighbor_list[3]]])
             case 1:
+                norm = (self.action - min(ALLOWED_BLOCKS)) / (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS))
                 input_vector = np.array(
                     [[neighbor_list[0]], [neighbor_list[1]], [neighbor_list[2]], [neighbor_list[3]],
-                     [self.action]])
+                     [norm]])
             case 2:
                 input_vector = np.array(
                     [[neighbor_list[0]], [neighbor_list[1]], [neighbor_list[2]], [neighbor_list[3]]])
             case 3:
+                norm = (self.action - min(ALLOWED_BLOCKS)) / (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS))
                 input_vector = np.array(
                     [[neighbor_list[0]], [neighbor_list[1]], [neighbor_list[2]], [neighbor_list[3]],
-                     [self.action]])
+                     [norm]])
 
         act = self.action_network.input(input_vector)
         denorm = act * (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS)) + min(ALLOWED_BLOCKS)  # de-normalize
@@ -167,42 +171,54 @@ def initialize_networks(pop):
     return pop
 
 
-def assign_new_networks(individual, sorted_fitness, sorted_population, mutation_prob, new_network_prob):
+def assign_new_networks(population, sorted_fitness, sorted_population, mutation_prob, new_network_prob):
     """Implementation of a 'wheel of fortune' to determine the new networks for an individual.
     All existing individuals and their networks are taken into account. The fitter an individual, the higher
      its chance to copy its network onto another individual. The copied networks might mutate before being
      assigned to the individual"""
 
-    uni = uniform()
-    if uni <= new_network_prob:
-        individual = replaceNetworks(individual)
+    replacements = []
+    for individual in population:
+        if individual != sorted_population[len(sorted_population) - 1]:  # fittest individual remains unchanged
+            uni = uniform()
+            if uni <= new_network_prob:
+                # save networks for possible assignment to other individuals
+                replacements.append((individual, (individual[0].prediction_network, individual[0].action_network)))
+                replaceNetworks(individual)
+            else:
+                old_max = new_network_prob
+                s = (sum(sorted_fitness) - new_network_prob * sum(sorted_fitness))
 
-    else:
-        old_max = new_network_prob
-        s = (sum(sorted_fitness) - new_network_prob * sum(sorted_fitness))
+                for i in range(len(sorted_fitness)):
+                    if old_max < uni <= ((sorted_fitness[i] / s) + old_max):
+                        # check if networks of chosen individual have previously been replaced
+                        if sorted_population[i] not in [x[0] for x in replacements]:
+                            pred_network = sorted_population[i][0].prediction_network
+                            act_network = sorted_population[i][0].action_network
+                        else:
+                            # assign saved networks of chosen individual
+                            for rep in replacements:
+                                if rep[0] == sorted_population[i]:
+                                    pred_network = rep[1][0]
+                                    act_network = rep[1][1]
+                        break
+                    old_max = old_max + (sorted_fitness[i] / s)
 
-        for i in range(len(sorted_fitness)):
-            if old_max < uni <= ((sorted_fitness[i] / s) + old_max):
-                pred_network = sorted_population[i][0].prediction_network
-                act_network = sorted_population[i][0].action_network
-                break
-            old_max = old_max + (sorted_fitness[i] / s)
+                if pred_network != individual[0].prediction_network:  # only assign network copy if new network != old network
+                    genomeAction = act_network.toGenome()
+                    genomePrediction = pred_network.toGenome()
 
-        if pred_network != individual[0].prediction_network:  # only assign network copy if new network != old network
-            genomeAction = act_network.toGenome()
-            genomePrediction = pred_network.toGenome()
+                    # mutate
+                    genomeAction = [x if random() >= mutation_prob else x + uniform(-0.4, 0.4) for x in genomeAction]
+                    genomePrediction = [x if random() >= mutation_prob else x + uniform(-0.4, 0.4) for x in
+                                        genomePrediction]
 
-            # mutate
-            genomeAction = [x if random() >= mutation_prob else x + uniform(-0.4, 0.4) for x in genomeAction]
-            genomePrediction = [x if random() >= mutation_prob else x + uniform(-0.4, 0.4) for x in
-                                genomePrediction]
-
-            for block in individual:
-                copy_act, copy_pred = new_networks(block.network_input_mode, block.prediction_mode)
-                copy_act.fromGenome(numpy.array(genomeAction))
-                copy_pred.fromGenome(numpy.array(genomePrediction))
-                block.prediction_network = copy_pred
-                block.action_network = copy_act
+                    for block in individual:
+                        copy_act, copy_pred = new_networks(block.network_input_mode, block.prediction_mode)
+                        copy_act.fromGenome(numpy.array(genomeAction))
+                        copy_pred.fromGenome(numpy.array(genomePrediction))
+                        block.prediction_network = copy_pred
+                        block.action_network = copy_act
 
 
 def replaceNetworks(individual):
@@ -215,8 +231,6 @@ def replaceNetworks(individual):
         a.fromGenome(new_act.toGenome())
         block.prediction_network = p
         block.action_network = a
-
-    return individual
 
 
 def new_networks(network_mode, prediction_mode):

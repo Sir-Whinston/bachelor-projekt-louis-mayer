@@ -58,7 +58,7 @@ NOISE_RATIO = 0.03
 
 """Defines how important the prediction is to evaluate a blocks score. Must be between 0 and 1. The higher the value,
  the more important the prediction. The importance of the bonus for change in action therefore is 1 - PREDICTION_WEIGHT"""
-PREDICTION_WEIGHT = 0.5
+PREDICTION_WEIGHT = 0.75
 
 
 def initialize():
@@ -86,13 +86,13 @@ def show_population(population, block_buffer: ClientHandler):
     block_buffer.send_to_server()
 
 
-def evolution(generations=1000, mutation_prob=0.1, parent_cuttoff_ratio=0.05):
+def evolution(generations=1000, mutation_prob=0.1):
     population = initialize()
     block_buffer = ClientHandler()
     population = find_neighbors(population, CAGE_SIZE)
     population = initialize_networks(population)
 
-    time.sleep(4)
+    time.sleep(2)
     show_population(population, block_buffer)
 
     fitness = []
@@ -109,11 +109,10 @@ def evolution(generations=1000, mutation_prob=0.1, parent_cuttoff_ratio=0.05):
             pop_x_fitness = sorted(pop_x_fitness, key=itemgetter(0), reverse=False)
             sorted_fitness, sorted_pop = map(list, zip(*pop_x_fitness))
 
-            for individual in population:
-                if individual != sorted_pop[len(sorted_pop) - 1]:  # fittest individual remains unchanged
-                    assign_new_networks(individual, sorted_fitness, sorted_pop, mutation_prob, NEW_NETWORK_PROB)
-
             print('Generation', int(generation / CYCLES_BETWEEN_EVALUATION))
+
+            # give new networks to individuals trough 'wheel of fortune'-process
+            assign_new_networks(population, sorted_fitness, sorted_pop, mutation_prob, NEW_NETWORK_PROB)
 
             # collect data for fitness plotting
             if PREDICTION_WEIGHT != 1.0:
@@ -121,19 +120,20 @@ def evolution(generations=1000, mutation_prob=0.1, parent_cuttoff_ratio=0.05):
             else:
                 bonus = 0
             if PREDICTION_MODE == 0:
-                fitness.append((((sorted_fitness[len(sorted_fitness) - 1])/((CAGE_SIZE[0]*CAGE_SIZE[1]*CYCLES_BETWEEN_EVALUATION) + bonus)), int(generation / CYCLES_BETWEEN_EVALUATION)))
+                fitness.append((((sorted_fitness[len(sorted_fitness) - 1])/((PREDICTION_WEIGHT*CAGE_SIZE[0]*CAGE_SIZE[1]*CYCLES_BETWEEN_EVALUATION) + bonus)), int(generation / CYCLES_BETWEEN_EVALUATION)))
             elif PREDICTION_MODE == 1 and NEIGHBOR_MODE == 0:
-                fitness.append((((sorted_fitness[len(sorted_fitness) - 1])/((CAGE_SIZE[0]*CAGE_SIZE[1]*CYCLES_BETWEEN_EVALUATION*4) - (2*CAGE_SIZE[0] + 2*CAGE_SIZE[1]) + bonus)), int(generation / CYCLES_BETWEEN_EVALUATION)))
+                fitness.append((((sorted_fitness[len(sorted_fitness) - 1])/(PREDICTION_WEIGHT*((CAGE_SIZE[0]*CAGE_SIZE[1]*CYCLES_BETWEEN_EVALUATION*4) - (2*CAGE_SIZE[0] + 2*CAGE_SIZE[1])) + bonus)), int(generation / CYCLES_BETWEEN_EVALUATION)))
             elif PREDICTION_MODE == 1 and NEIGHBOR_MODE == 1:
-                fitness.append((((sorted_fitness[len(sorted_fitness) - 1])/((CAGE_SIZE[0]*CAGE_SIZE[1]*CYCLES_BETWEEN_EVALUATION*4) + bonus)), int(generation / CYCLES_BETWEEN_EVALUATION)))
+                fitness.append((((sorted_fitness[len(sorted_fitness) - 1])/((PREDICTION_WEIGHT*CAGE_SIZE[0]*CAGE_SIZE[1]*CYCLES_BETWEEN_EVALUATION*4) + bonus)), int(generation / CYCLES_BETWEEN_EVALUATION)))
 
             time.sleep(1)
 
         for p in population:
             for block in p:
-                current_type = block.block_type
                 act = block.act()
                 block.predict(act)
+            for block in p:  # evaluation has to happen after all blocks have made predictions
+                current_type = block.block_type
                 evaluate(block, PREDICTION_WEIGHT, current_type)
 
         set_new_block_types(population)
@@ -150,5 +150,5 @@ def evolution(generations=1000, mutation_prob=0.1, parent_cuttoff_ratio=0.05):
 
 
 if __name__ == "__main__":
-    evolution(generations=601, mutation_prob=0.05)
+    evolution(generations=201, mutation_prob=0.05)
 
