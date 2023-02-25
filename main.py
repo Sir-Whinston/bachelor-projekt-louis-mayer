@@ -14,20 +14,19 @@ import pandas as pd
 
 sys.setrecursionlimit(10000)
 
+"""Coordinates on the Minecraft server"""
 START_COORD = (10, 4, 10)
+
+"""Defines how many individual 'arenas' are created"""
 POPULATION_SIZE = 10
+
+"""Defines how large (width x length) one individual 'arena' shall be."""
 CAGE_SIZE = (8, 12)
-"""If should go 3D, put Orientations up and down back into minecraft_pb2.py, line 54 _descriptor.EnumValueDescriptor(
-      name='UP', index=4, number=4,
-      serialized_options=None,
-      type=None,
-      create_key=_descriptor._internal_create_key),
-    _descriptor.EnumValueDescriptor(
-      name='DOWN', index=5, number=5,
-      serialized_options=None,
-      type=None,
-      create_key=_descriptor._internal_create_key),"""
-CYCLES_BETWEEN_EVALUATION = 20
+
+"""Defines how many time steps, i.e. predictions and evaluations made and actions executed, one generation contains."""
+CYCLES_PER_GENERATION = 20
+
+"""Defines the chance to 'pick' a completely new network on the wheel of fortune during network reassignment."""
 NEW_NETWORK_PROB = 0.05
 
 """Defines which inputs are given to the action and prediction networks. Possible modes are:
@@ -60,7 +59,7 @@ NOISE_RATIO = 0.03
  the more important the prediction. The importance of the bonus for change in action therefore is 1 - PREDICTION_WEIGHT"""
 PREDICTION_WEIGHT = 0.8
 
-"""Defines whether fitness data shall be collected and plotted"""
+"""Defines whether fitness data shall be collected and plotted. Possible settings: True or False"""
 PLOT = True
 
 
@@ -101,46 +100,10 @@ def evolution(generations=50, mutation_prob=0.05):
     show_population(population, block_buffer)
 
     fitness = []
-    for time_step in range(1, generations * CYCLES_BETWEEN_EVALUATION + 1):
-        # time.sleep(1)
+    for time_step in range(1, generations * CYCLES_PER_GENERATION + 1):
+        time.sleep(1)
 
         print('Time step', time_step)
-
-        if time_step % CYCLES_BETWEEN_EVALUATION == 0:
-            """evaluate individuals and form new population every *CYCLES_BETWEEN_EVALUATION* time_steps"""
-
-            ev = lambda i: evaluate_individuals(i)
-            fitness_values = list(map(ev, population))
-            pop_x_fitness = zip(fitness_values, population)
-            pop_x_fitness = sorted(pop_x_fitness, key=itemgetter(0), reverse=False)
-            sorted_fitness, sorted_pop = map(list, zip(*pop_x_fitness))
-
-            print('Generation', int(time_step / CYCLES_BETWEEN_EVALUATION))
-
-            # give new networks to individuals trough 'wheel of fortune'-process
-            assign_new_networks(population, sorted_fitness, sorted_pop, mutation_prob, NEW_NETWORK_PROB)
-
-            if PLOT:
-                # collect data for fitness plotting
-                if PREDICTION_WEIGHT != 1.0:
-                    bonus = (1 - PREDICTION_WEIGHT) * CAGE_SIZE[0] * CAGE_SIZE[1] * CYCLES_BETWEEN_EVALUATION
-                else:
-                    bonus = 0
-                if PREDICTION_MODE == 0:
-                    fitness.append((((sorted_fitness[len(sorted_fitness) - 1]) / (
-                            (PREDICTION_WEIGHT * CAGE_SIZE[0] * CAGE_SIZE[1] * CYCLES_BETWEEN_EVALUATION) + bonus)),
-                                    int(time_step / CYCLES_BETWEEN_EVALUATION)))
-                elif PREDICTION_MODE == 1 and NEIGHBOR_MODE == 0:
-                    fitness.append((((sorted_fitness[len(sorted_fitness) - 1]) / (PREDICTION_WEIGHT * (
-                            (CAGE_SIZE[0] * CAGE_SIZE[1] * CYCLES_BETWEEN_EVALUATION * 4) - (
-                            2 * CAGE_SIZE[0] + 2 * CAGE_SIZE[1])) + bonus)),
-                                    int(time_step / CYCLES_BETWEEN_EVALUATION)))
-                elif PREDICTION_MODE == 1 and NEIGHBOR_MODE == 1:
-                    fitness.append((((sorted_fitness[len(sorted_fitness) - 1]) / (
-                            (PREDICTION_WEIGHT * CAGE_SIZE[0] * CAGE_SIZE[1] * CYCLES_BETWEEN_EVALUATION * 4) + bonus)),
-                                    int(time_step / CYCLES_BETWEEN_EVALUATION)))
-
-            time.sleep(1)
 
         # blocks predict and determine their next action, then get evaluated
         for p in population:
@@ -154,6 +117,43 @@ def evolution(generations=50, mutation_prob=0.05):
 
         # show changed situation in Minecraft
         show_population(population, block_buffer)
+
+        if time_step % CYCLES_PER_GENERATION == 0:
+            """evaluate individuals and form new population every *CYCLES_PER_GENERATION* time_steps"""
+
+            ev = lambda i: evaluate_individuals(i)
+            fitness_values = list(map(ev, population))
+            pop_x_fitness = zip(fitness_values, population)
+            pop_x_fitness = sorted(pop_x_fitness, key=itemgetter(0), reverse=False)
+            sorted_fitness, sorted_pop = map(list, zip(*pop_x_fitness))
+
+            print('Generation', int(time_step / CYCLES_PER_GENERATION))
+
+            # give new networks to individuals trough 'wheel of fortune'-process
+            assign_new_networks(population, sorted_fitness, sorted_pop, mutation_prob, NEW_NETWORK_PROB)
+
+            if PLOT:
+                # collect data for fitness plotting
+                if PREDICTION_WEIGHT != 1.0:
+                    bonus = (1 - PREDICTION_WEIGHT) * CAGE_SIZE[0] * CAGE_SIZE[1] * CYCLES_PER_GENERATION
+                else:
+                    bonus = 0
+                if PREDICTION_MODE == 0:
+                    fitness.append((((sorted_fitness[len(sorted_fitness) - 1]) / (
+                            (PREDICTION_WEIGHT * CAGE_SIZE[0] * CAGE_SIZE[1] * CYCLES_PER_GENERATION) + bonus)),
+                                    int(time_step / CYCLES_PER_GENERATION)))
+                elif PREDICTION_MODE == 1 and NEIGHBOR_MODE == 0:
+                    fitness.append((((sorted_fitness[len(sorted_fitness) - 1]) / (PREDICTION_WEIGHT * (
+                            (CAGE_SIZE[0] * CAGE_SIZE[1] * CYCLES_PER_GENERATION * 4) - (
+                            2 * CAGE_SIZE[0] + 2 * CAGE_SIZE[1])) + bonus)),
+                                    int(time_step / CYCLES_PER_GENERATION)))
+                elif PREDICTION_MODE == 1 and NEIGHBOR_MODE == 1:
+                    fitness.append((((sorted_fitness[len(sorted_fitness) - 1]) / (
+                            (PREDICTION_WEIGHT * CAGE_SIZE[0] * CAGE_SIZE[1] * CYCLES_PER_GENERATION * 4) + bonus)),
+                                    int(time_step / CYCLES_PER_GENERATION)))
+
+            time.sleep(1)
+
 
     if PLOT:
         # save fitness development of this single run in pickle file to access when creating boxplot through plot.py
@@ -178,4 +178,6 @@ def evolution(generations=50, mutation_prob=0.05):
 
 
 if __name__ == "__main__":
-    evolution(generations=10, mutation_prob=0.05)
+    """Set desired amount of generations and mutation probability (i.e., probability for each network weight to be 
+    randomly altered after network reassignment) here."""
+    evolution(generations=50, mutation_prob=0.05)
