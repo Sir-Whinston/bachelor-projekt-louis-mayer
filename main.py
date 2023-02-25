@@ -1,5 +1,4 @@
-from node_structure import random_init, find_neighbors, initialize_networks, assign_new_networks, set_new_block_types, \
-    replaceNetworks, Node
+from node_structure import random_init, find_neighbors, initialize_networks, assign_new_networks, replaceNetworks, Node
 from utils.block_utils import ClientHandler
 from evaluation import evaluate, evaluate_individuals
 
@@ -7,6 +6,7 @@ from operator import itemgetter
 from numpy.random import uniform, randint
 import sys
 import time
+import pickle
 
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -27,7 +27,7 @@ CAGE_SIZE = (8, 12)
       serialized_options=None,
       type=None,
       create_key=_descriptor._internal_create_key),"""
-CYCLES_BETWEEN_EVALUATION = 10
+CYCLES_BETWEEN_EVALUATION = 20
 NEW_NETWORK_PROB = 0.05
 
 """Defines which inputs are given to the action and prediction networks. Possible modes are:
@@ -58,7 +58,10 @@ NOISE_RATIO = 0.03
 
 """Defines how important the prediction is to evaluate a blocks score. Must be between 0 and 1. The higher the value,
  the more important the prediction. The importance of the bonus for change in action therefore is 1 - PREDICTION_WEIGHT"""
-PREDICTION_WEIGHT = 0.75
+PREDICTION_WEIGHT = 0.8
+
+"""Defines whether fitness data shall be collected and plotted"""
+PLOT = True
 
 
 def initialize():
@@ -86,48 +89,60 @@ def show_population(population, block_buffer: ClientHandler):
     block_buffer.send_to_server()
 
 
-def evolution(generations=1000, mutation_prob=0.1):
+def evolution(generations=50, mutation_prob=0.05):
     population = initialize()
     block_buffer = ClientHandler()
     population = find_neighbors(population, CAGE_SIZE)
     population = initialize_networks(population)
 
-    time.sleep(2)
+    # time to switch to Minecraft tab and watch
+    time.sleep(10)
+
     show_population(population, block_buffer)
 
     fitness = []
-    for generation in range(generations):
-        #time.sleep(1)
+    for time_step in range(1, generations * CYCLES_BETWEEN_EVALUATION + 1):
+        # time.sleep(1)
 
-        print('Time step', generation)
+        print('Time step', time_step)
 
-        if generation % CYCLES_BETWEEN_EVALUATION == 0 and generation != 0:
-            """evaluate individuals and form new population every *CYCLES_BETWEEN_EVALUATION* generations"""
+        if time_step % CYCLES_BETWEEN_EVALUATION == 0:
+            """evaluate individuals and form new population every *CYCLES_BETWEEN_EVALUATION* time_steps"""
+
             ev = lambda i: evaluate_individuals(i)
             fitness_values = list(map(ev, population))
             pop_x_fitness = zip(fitness_values, population)
             pop_x_fitness = sorted(pop_x_fitness, key=itemgetter(0), reverse=False)
             sorted_fitness, sorted_pop = map(list, zip(*pop_x_fitness))
 
-            print('Generation', int(generation / CYCLES_BETWEEN_EVALUATION))
+            print('Generation', int(time_step / CYCLES_BETWEEN_EVALUATION))
 
             # give new networks to individuals trough 'wheel of fortune'-process
             assign_new_networks(population, sorted_fitness, sorted_pop, mutation_prob, NEW_NETWORK_PROB)
 
-            # collect data for fitness plotting
-            if PREDICTION_WEIGHT != 1.0:
-                bonus = (1-PREDICTION_WEIGHT) * CAGE_SIZE[0] * CAGE_SIZE[1] * CYCLES_BETWEEN_EVALUATION
-            else:
-                bonus = 0
-            if PREDICTION_MODE == 0:
-                fitness.append((((sorted_fitness[len(sorted_fitness) - 1])/((PREDICTION_WEIGHT*CAGE_SIZE[0]*CAGE_SIZE[1]*CYCLES_BETWEEN_EVALUATION) + bonus)), int(generation / CYCLES_BETWEEN_EVALUATION)))
-            elif PREDICTION_MODE == 1 and NEIGHBOR_MODE == 0:
-                fitness.append((((sorted_fitness[len(sorted_fitness) - 1])/(PREDICTION_WEIGHT*((CAGE_SIZE[0]*CAGE_SIZE[1]*CYCLES_BETWEEN_EVALUATION*4) - (2*CAGE_SIZE[0] + 2*CAGE_SIZE[1])) + bonus)), int(generation / CYCLES_BETWEEN_EVALUATION)))
-            elif PREDICTION_MODE == 1 and NEIGHBOR_MODE == 1:
-                fitness.append((((sorted_fitness[len(sorted_fitness) - 1])/((PREDICTION_WEIGHT*CAGE_SIZE[0]*CAGE_SIZE[1]*CYCLES_BETWEEN_EVALUATION*4) + bonus)), int(generation / CYCLES_BETWEEN_EVALUATION)))
+            if PLOT:
+                # collect data for fitness plotting
+                if PREDICTION_WEIGHT != 1.0:
+                    bonus = (1 - PREDICTION_WEIGHT) * CAGE_SIZE[0] * CAGE_SIZE[1] * CYCLES_BETWEEN_EVALUATION
+                else:
+                    bonus = 0
+                if PREDICTION_MODE == 0:
+                    fitness.append((((sorted_fitness[len(sorted_fitness) - 1]) / (
+                            (PREDICTION_WEIGHT * CAGE_SIZE[0] * CAGE_SIZE[1] * CYCLES_BETWEEN_EVALUATION) + bonus)),
+                                    int(time_step / CYCLES_BETWEEN_EVALUATION)))
+                elif PREDICTION_MODE == 1 and NEIGHBOR_MODE == 0:
+                    fitness.append((((sorted_fitness[len(sorted_fitness) - 1]) / (PREDICTION_WEIGHT * (
+                            (CAGE_SIZE[0] * CAGE_SIZE[1] * CYCLES_BETWEEN_EVALUATION * 4) - (
+                            2 * CAGE_SIZE[0] + 2 * CAGE_SIZE[1])) + bonus)),
+                                    int(time_step / CYCLES_BETWEEN_EVALUATION)))
+                elif PREDICTION_MODE == 1 and NEIGHBOR_MODE == 1:
+                    fitness.append((((sorted_fitness[len(sorted_fitness) - 1]) / (
+                            (PREDICTION_WEIGHT * CAGE_SIZE[0] * CAGE_SIZE[1] * CYCLES_BETWEEN_EVALUATION * 4) + bonus)),
+                                    int(time_step / CYCLES_BETWEEN_EVALUATION)))
 
             time.sleep(1)
 
+        # blocks predict and determine their next action, then get evaluated
         for p in population:
             for block in p:
                 act = block.act()
@@ -135,20 +150,32 @@ def evolution(generations=1000, mutation_prob=0.1):
             for block in p:  # evaluation has to happen after all blocks have made predictions
                 current_type = block.block_type
                 evaluate(block, PREDICTION_WEIGHT, current_type)
+                block.block_type = block.action  # update block type according to action determined by block
 
-        set_new_block_types(population)
+        # show changed situation in Minecraft
         show_population(population, block_buffer)
 
-    # plotting of fitness development
-    df = pd.DataFrame({"Generation": [f[1] for f in fitness],
-                       "Fitness (score of best individual in generation)"
-                       : [f[0] for f in fitness]})
-    sns.lineplot(x="Generation", y="Fitness (score of best individual in generation)", data=df)
-    plt.xticks(rotation=15)
-    plt.title('Development of fitness')
-    plt.show()
+    if PLOT:
+        # save fitness development of this single run in pickle file to access when creating boxplot through plot.py
+        try:
+            f = open('plot.pickle', 'rb')
+            temp = pickle.load(f)
+        except:
+            temp = []
+
+        f = open('plot.pickle', 'wb')
+        temp.append(fitness)
+        pickle.dump(temp, f)
+
+        # plotting of fitness development of this single run
+        df = pd.DataFrame({"Generation": [f[1] for f in fitness],
+                           "Fitness (score of best individual in generation)"
+                           : [f[0] for f in fitness]})
+        sns.lineplot(x="Generation", y="Fitness (score of best individual in generation)", data=df)
+        plt.xticks(rotation=15)
+        plt.title('Development of fitness')
+        plt.show()
 
 
 if __name__ == "__main__":
-    evolution(generations=201, mutation_prob=0.05)
-
+    evolution(generations=10, mutation_prob=0.05)

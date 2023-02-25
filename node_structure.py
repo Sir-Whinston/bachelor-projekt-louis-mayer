@@ -28,7 +28,6 @@ class Node:
         self.prediction_mode = prediction_mode
 
     def predict(self, act):
-
         neighbor_list = self.getNeighborBlockTypes()
 
         match self.network_input_mode:
@@ -61,7 +60,6 @@ class Node:
         self.prediction = result
 
     def act(self):
-
         neighbor_list = self.getNeighborBlockTypes()
 
         match self.network_input_mode:
@@ -86,7 +84,6 @@ class Node:
         denorm = act * (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS)) + min(ALLOWED_BLOCKS)  # de-normalize
         result = find_nearest(ALLOWED_BLOCKS, denorm)  # find corresponding block
         self.action = result
-
         return result
 
     def getNeighborBlockTypes(self):
@@ -115,12 +112,6 @@ def find_nearest(array, value):
     array = np.asarray(array)
     idx = (np.abs(array - value)).argmin()
     return array[idx]
-
-
-def set_new_block_types(pop):
-    for p in pop:
-        for block in p:
-            block.block_type = block.action
 
 
 def find_neighbors(pop, cage_size):
