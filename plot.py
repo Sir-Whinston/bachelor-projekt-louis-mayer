@@ -9,7 +9,7 @@ from which a boxplot is composed."""
 try:
     f = open('plot.pickle', 'rb')
     temp = pickle.load(f)
-    print(temp)
+    print(len(temp))
     final_list = []
 
     for gen in range(len(temp[0])):
@@ -25,6 +25,14 @@ try:
     # Creating plot
     bp = ax.boxplot(final_list)
     plt.ylim(0.6, 1)
+
+    # section for long runs (reduces number of labels on x axis and removes ticks)
+    if len(temp[0]) > 50:
+        n = len(temp[0]) / 10  # Keeps only one tenth of the generation labels
+        [l.set_visible(False) for (i, l) in enumerate(ax.xaxis.get_ticklabels()) if (i+1) % n != 0]
+        ax.xaxis.set_ticks_position('none')
+
+
     plt.xlabel("Generation", fontsize=14)
     plt.ylabel("Fitness (score of best individual in generation)", fontsize=14)
     plt.title(f"Fitness development of {len(temp)} runs", fontsize=16)
@@ -32,7 +40,7 @@ try:
     # show plot
     plt.show()
 
-    # clear pickle file
+    # clears pickle file. Therefore, make sure to save the created plot.
     f = open('plot.pickle', 'w').close()
 
 except:

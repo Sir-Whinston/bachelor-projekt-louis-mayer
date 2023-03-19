@@ -59,6 +59,12 @@ NOISE_RATIO = 0.03
  the more important the prediction. The importance of the bonus for change in action therefore is 1 - PREDICTION_WEIGHT"""
 PREDICTION_WEIGHT = 0.8
 
+"""Defines the chance for a single network weight to change its value during mutation"""
+MUTATION_PROB = 0.05
+
+"""Defines for how many generations (i.e. arena evaluations and network reassignments) the program should run"""
+GENERATIONS = 5000
+
 """Defines whether fitness data shall be collected and plotted. Possible settings: True or False"""
 PLOT = True
 
@@ -101,7 +107,7 @@ def evolution(generations=50, mutation_prob=0.05):
 
     fitness = []
     for time_step in range(1, generations * CYCLES_PER_GENERATION + 1):
-        time.sleep(1)
+        #time.sleep(1)
 
         print('Time step', time_step)
 
@@ -110,10 +116,10 @@ def evolution(generations=50, mutation_prob=0.05):
             for block in p:
                 act = block.act()
                 block.predict(act)
-            for block in p:  # evaluation has to happen after all blocks have made predictions
+            for block in p:  # evaluation has to happen after all blocks have made predictions and actions
                 current_type = block.block_type
-                evaluate(block, PREDICTION_WEIGHT, current_type)
                 block.block_type = block.action  # update block type according to action determined by block
+                evaluate(block, PREDICTION_WEIGHT, current_type)
 
         # show changed situation in Minecraft
         show_population(population, block_buffer)
@@ -126,34 +132,18 @@ def evolution(generations=50, mutation_prob=0.05):
             pop_x_fitness = zip(fitness_values, population)
             pop_x_fitness = sorted(pop_x_fitness, key=itemgetter(0), reverse=False)
             sorted_fitness, sorted_pop = map(list, zip(*pop_x_fitness))
+            print('End of generation', int(time_step / CYCLES_PER_GENERATION))
 
-            print('Generation', int(time_step / CYCLES_PER_GENERATION))
-
-            # give new networks to individuals trough 'wheel of fortune'-process
+            # give new networks to individuals trough 'wheel of fortune' process
             assign_new_networks(population, sorted_fitness, sorted_pop, mutation_prob, NEW_NETWORK_PROB)
 
             if PLOT:
                 # collect data for fitness plotting
-                if PREDICTION_WEIGHT != 1.0:
-                    bonus = (1 - PREDICTION_WEIGHT) * CAGE_SIZE[0] * CAGE_SIZE[1] * CYCLES_PER_GENERATION
-                else:
-                    bonus = 0
-                if PREDICTION_MODE == 0:
-                    fitness.append((((sorted_fitness[len(sorted_fitness) - 1]) / (
-                            (PREDICTION_WEIGHT * CAGE_SIZE[0] * CAGE_SIZE[1] * CYCLES_PER_GENERATION) + bonus)),
-                                    int(time_step / CYCLES_PER_GENERATION)))
-                elif PREDICTION_MODE == 1 and NEIGHBOR_MODE == 0:
-                    fitness.append((((sorted_fitness[len(sorted_fitness) - 1]) / (PREDICTION_WEIGHT * (
-                            (CAGE_SIZE[0] * CAGE_SIZE[1] * CYCLES_PER_GENERATION * 4) - (
-                            2 * CAGE_SIZE[0] + 2 * CAGE_SIZE[1])) + bonus)),
-                                    int(time_step / CYCLES_PER_GENERATION)))
-                elif PREDICTION_MODE == 1 and NEIGHBOR_MODE == 1:
-                    fitness.append((((sorted_fitness[len(sorted_fitness) - 1]) / (
-                            (PREDICTION_WEIGHT * CAGE_SIZE[0] * CAGE_SIZE[1] * CYCLES_PER_GENERATION * 4) + bonus)),
+                fitness.append((((sorted_fitness[len(sorted_fitness) - 1]) / (CAGE_SIZE[0] * CAGE_SIZE[1] *
+                                                                              CYCLES_PER_GENERATION)),
                                     int(time_step / CYCLES_PER_GENERATION)))
 
             time.sleep(1)
-
 
     if PLOT:
         # save fitness development of this single run in pickle file to access when creating boxplot through plot.py
@@ -178,6 +168,4 @@ def evolution(generations=50, mutation_prob=0.05):
 
 
 if __name__ == "__main__":
-    """Set desired amount of generations and mutation probability (i.e., probability for each network weight to be 
-    randomly altered after network reassignment) here."""
-    evolution(generations=50, mutation_prob=0.05)
+    evolution(generations=GENERATIONS, mutation_prob=MUTATION_PROB)

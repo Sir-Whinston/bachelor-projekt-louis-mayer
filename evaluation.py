@@ -1,5 +1,4 @@
 from node_structure import Node, ALLOWED_BLOCKS
-from typing import List
 
 
 def evaluate(block: Node, pred_weight, current_type):
@@ -15,6 +14,8 @@ def evaluate(block: Node, pred_weight, current_type):
             norm_pred = (block.prediction[i] - min(ALLOWED_BLOCKS)) / (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS))
             norm_act = (block.neighbors[i][0].action - min(ALLOWED_BLOCKS)) / (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS))
             points = points + (1 - abs(norm_pred - norm_act))
+
+        points = points/len(block.neighbors)  # calculate mean accuracy -> maximum 1
 
     # give bonus if next action (future block type) is not current block type -> encourage change
     if current_type == block.action:

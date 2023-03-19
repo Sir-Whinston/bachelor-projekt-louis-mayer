@@ -145,7 +145,7 @@ def find_neighbors(pop, cage_size):
 
 
 def sigmoid(x):
-    return 1 / (1 + np.exp(-3 * x))
+    return 1 / (1 + np.exp(-4 * x))  # -4 in order to reach all values in (0,1) with -1 <= x <= 1
 
 
 def initialize_networks(pop):
