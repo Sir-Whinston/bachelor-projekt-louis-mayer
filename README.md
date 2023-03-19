@@ -11,7 +11,7 @@ After purchasing the license, follow these steps to launch the correct Minecraft
 3. Log in with the Microsoft account used to obtain the Minecraft license
 4. Switch to the ``Installations" tab
 5. Create a new installation by clicking the respective button
-6. Give the installation a name and select ``release 1.12.2" as version. Everything else can be left as is. Only with these settings the EvoCraft API (see Sec.~\ref{sec:api}) will work. Click ``create" to create the installation.
+6. Give the installation a name and select "release 1.12.2" as version. Everything else can be left as is. Only with these settings the EvoCraft API (see Sec.~\ref{sec:api}) will work. Click ``create" to create the installation.
 7. Back in the "Play" tab, select the newly created installation in the dropdown menu next to the play button and click "Play". A new window with the Minecraft home screen will open. 
 
 Minecraft Server and the EvoCraft API
@@ -23,17 +23,17 @@ Hint: The required eula.txt file might not be directly visible in the directory,
 Program launch
 Once the server is running, follow these steps to launch the program:
 
-1. Open the Minecraft window (see Step 2.1~\ref{step:window}) and select ``Multiplayer"
+1. Open the Minecraft window and select ``Multiplayer"
 2. Select "Direct Connect", enter ``localhost" as server adress and join the server. 
 3. Clone the repository from https://github.com/Sir-Whinston/bachelor-projekt-louis-mayer
-4. In main.py, set all parameters (see Sec.~\ref{sec:params}) to your liking
+4. In main.py, set all parameters to your liking
 5. In Minecraft, navigate to the start coordinates set in main.py. Moving around is possible using the W,A,S,D keys, the players current coordinates can be seen under ``XYZ" after hitting F3. 
     
 Hint: Enter "teleport YourPlayerName x y z" in the terminal running the Minecraft server to get to the desired coordinates (x,y,z) directly. YourPlayerName refers to your Minecraft user name. It can be seen in the message appearing in the terminal running the server: ``YourPlayerName joined the game".
  
- 6. Open another terminal, navigate to the cloned folder (see Step \ref{step:folder}) and execute main.py
+ 6. Open another terminal, navigate to the cloned folder and execute main.py
 
-7. Return to the Minecraft window and watch the evolutionary process. The program waits for 10 seconds before it starts, so there is enough time to switch windows. See Fig.~\ref{fig:example} for an example of how the end result might look like.
+7. Return to the Minecraft window and watch the evolutionary process. The program waits for 10 seconds before it starts, so there is enough time to switch windows.
 
 Hint: By double-clicking the SPACE key on the keyboard, it is possible to fly around in Minecraft and therefore have a better view over the scene. Changing the altitude is possible through the SPACE and SHIFT keys.
 
@@ -48,7 +48,7 @@ Hint: When running several instances of main.py in parallel (e.g. in several ter
 
 Cleaning the Minecraft server
 
-All blocks being placed on the Minecraft server stay until actively removed, even after a server restart. Therefore, if a removal of all blocks is necessary (e.g. for a change in POPULATION\_SIZE or CAGE\_SIZE), execute clean.py to remove all blocks row by row. Make sure to set the required parameters to the same value as they are set to in main.py.
+All blocks being placed on the Minecraft server stay until actively removed, even after a server restart. Therefore, if a removal of all blocks is necessary (e.g. for a change in POPULATION_SIZE or CAGE_SIZE), execute clean.py to remove all blocks row by row. Make sure to set the required parameters to the same value as they are set to in main.py.
 
 
 
