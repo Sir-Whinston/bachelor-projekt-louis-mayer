@@ -63,12 +63,13 @@ PREDICTION_WEIGHT = 0.8
 MUTATION_PROB = 0.05
 
 """Defines for how many generations (i.e. arena evaluations and network reassignments) the program should run"""
-GENERATIONS = 5000
+GENERATIONS = 1500
 
 """Defines whether fitness data shall be collected and plotted. Possible settings: True or False"""
 PLOT = True
 
 
+"""Create all arenas as a list of lists"""
 def initialize():
     individual_list = []
 
@@ -87,6 +88,7 @@ def initialize():
     return individual_list
 
 
+"""Sends the current population list to the Minecraft server to display"""
 def show_population(population, block_buffer: ClientHandler):
     for i in population:
         for p in i:
@@ -107,7 +109,6 @@ def evolution(generations=50, mutation_prob=0.05):
 
     fitness = []
     for time_step in range(1, generations * CYCLES_PER_GENERATION + 1):
-        #time.sleep(1)
 
         print('Time step', time_step)
 
@@ -162,6 +163,7 @@ def evolution(generations=50, mutation_prob=0.05):
                            "Fitness (score of best individual in generation)"
                            : [f[0] for f in fitness]})
         sns.lineplot(x="Generation", y="Fitness (score of best individual in generation)", data=df)
+        plt.ylim(0.5, 1)
         plt.xticks(rotation=15)
         plt.title('Development of fitness')
         plt.show()

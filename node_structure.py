@@ -10,7 +10,7 @@ ALLOWED_BLOCKS = [GLASS, REDSTONE_BLOCK, COAL_BLOCK, LAPIS_BLOCK, COBBLESTONE]
 
 
 class Node:
-    """basic node structure for graph representation of a block and its neighbors """
+    """Representation of a Minecraft block as a node in a tree"""
 
     def __init__(self, block_type_id, orientation, coordinate, network_input_mode, neighbor_mode, noise_ratio, prediction_mode):
         self.block_type = block_type_id
@@ -92,6 +92,7 @@ class Node:
             neighbor_list = [0, 0, 0, 0]
             for i in range(len(self.neighbors)):
                 norm = (self.neighbors[i][0].block_type - min(ALLOWED_BLOCKS)) / (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS))  # normalize
+                # with a small chance, pick a random, wrong input
                 if random() <= self.noise:
                     neighbor_list[i] = (choice([x for x in ALLOWED_BLOCKS if x != self.neighbors[i][0].block_type]) - min(ALLOWED_BLOCKS)) / (max(ALLOWED_BLOCKS) - min(ALLOWED_BLOCKS))
                 else:
@@ -108,6 +109,8 @@ class Node:
         return neighbor_list
 
 
+"""Find the entry in an array with the smallest distance to a given value. This is used to determine which
+block the NN output encodes"""
 def find_nearest(array, value):
     array = np.asarray(array)
     idx = (np.abs(array - value)).argmin()

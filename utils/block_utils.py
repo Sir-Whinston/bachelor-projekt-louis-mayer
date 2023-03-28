@@ -4,6 +4,8 @@ from typing import List, Tuple
 import client.minecraft_pb2_grpc as mcraft_grpc
 from client.minecraft_pb2 import *
 
+"""Code by Grbic et al., 2021"""
+
 BLOCKS = BlockType.values()
 ORIENTATIONS = Orientation.values()
 ENTITIES = EntityType.values()
